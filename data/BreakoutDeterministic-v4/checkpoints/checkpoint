@@ -1,0 +1,2 @@
+model_checkpoint_path: "/Users/Mobvill/Desktop/Workspace/RLearning/DQN/data/BreakoutDeterministic-v4/checkpoints/model"
+all_model_checkpoint_paths: "/Users/Mobvill/Desktop/Workspace/RLearning/DQN/data/BreakoutDeterministic-v4/checkpoints/model"
