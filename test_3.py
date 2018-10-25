@@ -12,6 +12,9 @@ import time
 env = gym.make('BreakoutDeterministic-v4')
 VALID_ACTIONS = [0,1,2,3]
 
+
+
+
 class StateProcessor:
     def __init__(self):
         with tf.variable_scope('state_processor'):
@@ -98,32 +101,44 @@ class Model:
         _, loss = sess.run([self.train_op, self.loss], feed_dict={self.X:x, self.actions:a, self.rewards:r})
         return loss
 
+def create_initial_state(sess, processor):
+    state = env.reset()
+
+    # 1. PROCESS STATE(IMG)
+
+    # 2. STACK 4 STATES TO CREATE STATE
+
+    return state
+
+def update_next_state(state, next_state, sess, processor):
+    # 1. PROCESS NEXT STATE(IMG)
+
+    # 2. ADD NEXT_STATE TO STACK, REMOVE FIRST STATE FROM STACK
+
+    return next_state
+
+
 def collect_experience(sess, replay_memory, processor, epsilons, policy, global_t, epsilon_decay_steps):
     buffer = deque()
-    state = env.reset()
-    state = processor.process(sess, state)
-    state = np.stack([state] * 4, axis=2)
+    state = create_initial_state(sess, processor)
 
     for i in range(replay_memory):
 
         #List of len 4, sum to 1.
-        action_probs = policy(sess, state, epsilons[min(global_t, epsilon_decay_steps - 1)])
+        #action_probs = policy(sess, state, epsilons[min(global_t, epsilon_decay_steps - 1)])
 
         #Will choose from the probs based on prob distribution
-        action = np.random.choice(len(action_probs), p=action_probs)
+        action = 0#np.random.choice(len(action_probs), p=action_probs)
 
         next_state, reward, done, _ = env.step(VALID_ACTIONS[action])
+        next_state = update_next_state(state, next_state, sess, processor)
 
-        next_state = processor.process(sess, next_state)
-        next_state = np.append(state[:,:,1:], np.expand_dims(next_state, 2), axis=2)
         buffer.append((state, action, reward, next_state, done))
 
         state = next_state
 
         if done:
-            state = env.reset()
-            state = processor.process(sess, state)
-            state = np.stack([state] * 4, axis=2)
+            state = create_initial_state(sess, processor)
 
     return buffer
 
@@ -150,8 +165,8 @@ def run():
     epsilon_end = 0.05
     epsilon_decay_steps = 250000
     buffer_size = 50000
-    buffer_max_size = 200000
-    update_target = 2500
+    buffer_max_size = 50000
+    update_target = 5000
     train_episodes = 10000
 
     tf.reset_default_graph()
@@ -191,50 +206,50 @@ def run():
         for i in range(train_episodes):
             saver.save(tf.get_default_session(), checkpoint_path)
 
-            state = env.reset()
-            state = processor.process(sess, state)
-            state = np.stack([state] * 4, axis=2)
+            state = create_initial_state(sess, processor)
 
             game_score = 0
 
-            while "pigs can fly":
+            while "Thor" > "Thanos":
                 epsilon = epsilons[min(global_step, epsilon_decay_steps - 1)]
 
                 if global_step % update_target == 0:
                     copy_model(sess, q_model, target_model)
 
-                actions_prob = policy(sess, state, epsilon)
+                #actions_prob = policy(sess, state, epsilon)
 
-                action = np.random.choice(len(actions_prob), p=actions_prob)
+                action = 0#np.random.choice(len(actions_prob), p=actions_prob)
 
                 next_state, reward, done, _ = env.step(VALID_ACTIONS[action])
+                next_state = update_next_state(state, next_state, sess, processor)
                 game_score += reward
-                next_state = processor.process(sess, next_state)
-                next_state = np.append(state[:,:,1:], np.expand_dims(next_state, 2), axis=2)
 
                 if len(buffer) > buffer_max_size:
                     buffer.popleft()
 
                 buffer.append((state, action, reward, next_state, done))
 
-                mini_batch = random.sample(buffer, batch)
-                #Creating numpy arrays for each item in the mini_batch
-                _states, _actions, _rewards, _next_states, _dones = map(np.array, zip(*mini_batch))
+                # 1. CREATE MINI BATCH OF SIZE 32 FROM BUFFER
 
-                Q_next = target_model.predict(sess, _next_states)
 
-                target = _rewards + np.invert(_dones).astype(np.float32) * discount * np.max(Q_next, axis=1)
+                # 2. GET Q_VALS FROM NEXT STATES (S', A')
 
-                loss = q_model.update(sess, _states, _actions, target)
 
-                if global_step % 200 == 0:
-                    print("ITER:  ", global_step, " EPSILON  ", epsilon, " LOSS  ", loss, "  REWARDS  ", sum(target))
+                # 3. CALCULATE LABELS FOR TRAINING
+
+
+                # 4. LEARN, GET LOSS
+
+
+                #if global_step % 200 == 0:
+                    #print("ITER:  ", global_step, " EPSILON  ", epsilon, " LOSS  ", loss, "  REWARDS  ", sum(target))
 
                 if done:
                     break
 
                 global_step += 1
                 state = next_state
+
             if game_score > max_score:
                 max_score = game_score
             game_time = float(time.time()-start_time)
@@ -242,18 +257,16 @@ def run():
 
 
 def play_game():
-    tf.reset_default_graph()
+    #env = gym.make('Breakout-v0')
+
     experiment_dir = os.path.abspath("./data/{}".format(env.spec.id))
     checkpoint_dir = os.path.join(experiment_dir, 'checkpoints')
-    checkpoint_path = os.path.join(checkpoint_dir, "model")
 
     q_model = Model(scope="q", batch=1)
-    target_model = Model(scope='target_q', batch=1)
     processor = StateProcessor()
     policy = epsilon_greedy(q_model, len(VALID_ACTIONS))
 
     # Create a distribution of all the steps from start to end [1.0 ... 0.01] based on decay steps
-    epsilons = np.linspace(10, 0.01, 100)
 
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
@@ -263,30 +276,24 @@ def play_game():
         if chkpoint:
             print("loading saved model  ")
             saver.restore(sess, chkpoint)
-        print("PLAYING")
-        state = env.reset()
-        state = processor.process(sess, state)
-        state = np.stack([state] * 4, axis=2)
+        state = create_initial_state(sess, processor)
 
         while True:
             env.render()
-            action_probs = policy(sess, state, 1)
-            action = np.random.choice(len(action_probs), p=action_probs)
-            next_state, reward, done, _ = env.step(VALID_ACTIONS[action])
-            next_state = processor.process(sess, next_state)
-            next_state = np.append(state[:, :, 1:], np.expand_dims(next_state, 2), axis=2)
-            if done:
-                state = env.reset()
-                state = processor.process(sess, state)
-                state = np.stack([state] * 4, axis=2)
-            else:
-                state = next_state
+            #action_probs = policy(sess, state, 0)
+            action = env.action_space.sample()#np.random.choice(len(VALID_ACTIONS), p=action_probs)
 
-            time.sleep(0.0075)
+            next_state, reward, done, _ = env.step(action)
+            next_state = update_next_state(state, next_state, sess, processor)
+            state = next_state
+            if done:
+                state = create_initial_state(sess, processor)
+
+            #time.sleep(0.0075)
+
     return
 
 if __name__=="__main__":
 
-    run()
-    #test()
-    #play_game()
+    #run()
+    play_game()
