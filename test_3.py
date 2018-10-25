@@ -1,12 +1,8 @@
 import tensorflow as tf
 import os
-import sys
 import numpy as np
 import gym
-import itertools
-from collections import deque, namedtuple
-import random
-from gym.wrappers import Monitor
+from collections import deque
 import time
 
 env = gym.make('BreakoutDeterministic-v4')
@@ -163,9 +159,9 @@ def run():
     discount = 0.99
     epsilon_start = 1.0
     epsilon_end = 0.05
-    epsilon_decay_steps = 250000
+    epsilon_decay_steps = 500000
     buffer_size = 50000
-    buffer_max_size = 50000
+    buffer_max_size = 100000
     update_target = 5000
     train_episodes = 10000
 
@@ -295,5 +291,5 @@ def play_game():
 
 if __name__=="__main__":
 
-    #run()
-    play_game()
+    run()
+    #play_game()
