@@ -4,6 +4,7 @@ import numpy as np
 import gym
 from collections import deque
 import time
+import random
 
 env = gym.make('BreakoutDeterministic-v4')
 VALID_ACTIONS = [0,1,2,3]
@@ -101,15 +102,18 @@ def create_initial_state(sess, processor):
     state = env.reset()
 
     # 1. PROCESS STATE(IMG)
-
+    state = processor.process(sess, state)
     # 2. STACK 4 STATES TO CREATE STATE
+    state = np.stack([state] * 4, axis=2)
 
     return state
 
 def update_next_state(state, next_state, sess, processor):
-    # 1. PROCESS NEXT STATE(IMG)
 
+    # 1. PROCESS NEXT STATE(IMG)
+    next_state = processor.process(sess, next_state)
     # 2. ADD NEXT_STATE TO STACK, REMOVE FIRST STATE FROM STACK
+    next_state = np.append(state[:, :, 1:], np.expand_dims(next_state, 2), axis=2)
 
     return next_state
 
@@ -121,10 +125,10 @@ def collect_experience(sess, replay_memory, processor, epsilons, policy, global_
     for i in range(replay_memory):
 
         #List of len 4, sum to 1.
-        #action_probs = policy(sess, state, epsilons[min(global_t, epsilon_decay_steps - 1)])
+        action_probs = policy(sess, state, epsilons[min(global_t, epsilon_decay_steps - 1)])
 
         #Will choose from the probs based on prob distribution
-        action = 0#np.random.choice(len(action_probs), p=action_probs)
+        action = np.random.choice(len(action_probs), p=action_probs)
 
         next_state, reward, done, _ = env.step(VALID_ACTIONS[action])
         next_state = update_next_state(state, next_state, sess, processor)
@@ -159,9 +163,9 @@ def run():
     discount = 0.99
     epsilon_start = 1.0
     epsilon_end = 0.05
-    epsilon_decay_steps = 500000
-    buffer_size = 50000
-    buffer_max_size = 100000
+    epsilon_decay_steps = 250000
+    buffer_size = 25000
+    buffer_max_size = 25000
     update_target = 5000
     train_episodes = 10000
 
@@ -203,7 +207,6 @@ def run():
             saver.save(tf.get_default_session(), checkpoint_path)
 
             state = create_initial_state(sess, processor)
-
             game_score = 0
 
             while "Thor" > "Thanos":
@@ -212,9 +215,9 @@ def run():
                 if global_step % update_target == 0:
                     copy_model(sess, q_model, target_model)
 
-                #actions_prob = policy(sess, state, epsilon)
+                actions_prob = policy(sess, state, epsilon)
 
-                action = 0#np.random.choice(len(actions_prob), p=actions_prob)
+                action = np.random.choice(len(actions_prob), p=actions_prob)
 
                 next_state, reward, done, _ = env.step(VALID_ACTIONS[action])
                 next_state = update_next_state(state, next_state, sess, processor)
@@ -226,25 +229,27 @@ def run():
                 buffer.append((state, action, reward, next_state, done))
 
                 # 1. CREATE MINI BATCH OF SIZE 32 FROM BUFFER
-
+                mini_batch = random.sample(buffer, batch)
+                _states, _actions, _rewards, _next_states, _dones = map(np.array, zip(*mini_batch))
 
                 # 2. GET Q_VALS FROM NEXT STATES (S', A')
-
+                Q_next = target_model.predict(sess, _next_states)
 
                 # 3. CALCULATE LABELS FOR TRAINING
-
+                target = _rewards + np.invert(_dones).astype(np.float32) * discount * np.max(Q_next, axis=1)
 
                 # 4. LEARN, GET LOSS
+                loss = q_model.update(sess, _states, _actions, target)
 
-
-                #if global_step % 200 == 0:
-                    #print("ITER:  ", global_step, " EPSILON  ", epsilon, " LOSS  ", loss, "  REWARDS  ", sum(target))
+                if global_step % 200 == 0:
+                    print("ITER:  ", global_step, " EPSILON  ", epsilon, " LOSS  ", loss, "  REWARDS  ", sum(target))
 
                 if done:
                     break
 
                 global_step += 1
                 state = next_state
+
 
             if game_score > max_score:
                 max_score = game_score
@@ -253,8 +258,8 @@ def run():
 
 
 def play_game():
-    #env = gym.make('Breakout-v0')
-
+    env = gym.make('MontezumaRevenge-v0')
+    env.reset()
     experiment_dir = os.path.abspath("./data/{}".format(env.spec.id))
     checkpoint_dir = os.path.join(experiment_dir, 'checkpoints')
 
@@ -283,6 +288,7 @@ def play_game():
             next_state = update_next_state(state, next_state, sess, processor)
             state = next_state
             if done:
+                env.reset()
                 state = create_initial_state(sess, processor)
 
             #time.sleep(0.0075)
