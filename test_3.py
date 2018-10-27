@@ -258,8 +258,8 @@ def run():
 
 
 def play_game():
-    env = gym.make('MontezumaRevenge-v0')
-    env.reset()
+
+
     experiment_dir = os.path.abspath("./data/{}".format(env.spec.id))
     checkpoint_dir = os.path.join(experiment_dir, 'checkpoints')
 
@@ -281,21 +281,21 @@ def play_game():
 
         while True:
             env.render()
-            #action_probs = policy(sess, state, 0)
-            action = env.action_space.sample()#np.random.choice(len(VALID_ACTIONS), p=action_probs)
+            action_probs = policy(sess, state, 0.1)
+            action = np.random.choice(len(VALID_ACTIONS), p=action_probs)
 
-            next_state, reward, done, _ = env.step(action)
+            next_state, reward, done, _ = env.step(VALID_ACTIONS[action])
             next_state = update_next_state(state, next_state, sess, processor)
             state = next_state
             if done:
-                env.reset()
+                print("DONE  ")
                 state = create_initial_state(sess, processor)
 
-            #time.sleep(0.0075)
+            time.sleep(0.0075)
 
     return
 
 if __name__=="__main__":
 
-    run()
-    #play_game()
+    #run()
+    play_game()
