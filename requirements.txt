@@ -19,7 +19,7 @@ imageio==2.4.1
 kiwisolver==1.0.1
 Markdown==2.6.11
 mujoco-py==1.50.1.56
-numpy==1.14.5
+numpy==1.22.0
 opencv-python==3.4.3.18
 Pillow==5.2.0
 protobuf==3.6.1
